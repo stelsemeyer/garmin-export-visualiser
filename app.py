@@ -7,97 +7,15 @@ import io
 import pandas as pd
 
 
+DATE_COL = "calendarDate"
+TIME_COLS = ["calendarDate", "week", "month", "year"]
+AGGREGATE_FUNCTIONS = ["median", "mean", "sum", "min", "max", "count"]
+
+
 def normalise_camel_case(x):
     """Convert a string like 'camelCase' to 'camel case'."""
     result_str = "".join([" " + char if char.isupper() and index != 0 else char for index, char in enumerate(x)])
-    return result_str.lower()
-
-
-external_stylesheets = ["https://codepen.io/chriddyp/pen/bWLwgP.css"]
-
-app = Dash(__name__, external_stylesheets=external_stylesheets)
-
-DATE_COL = "calendarDate"
-TIME_COLS = ["calendarDate", "week", "month", "year"]
-TIME_COLS_LABELS = [{"label": normalise_camel_case(col).capitalize(), "value": col} for col in TIME_COLS]
-
-AGGREGATE_FUNCTIONS = ["median", "mean", "sum", "min", "max", "count"]
-AGGREGATE_FUNCTIONS_LABELS = [
-    {"label": normalise_camel_case(col).capitalize(), "value": col} for col in AGGREGATE_FUNCTIONS
-]
-
-
-app.title = "Garmin data export visualiser"
-app.layout = html.Div(
-    [
-        html.H3("Garmin data export visualiser"),
-        html.Div(
-            [
-                dcc.Upload(
-                    id="upload-data",
-                    children=html.Div(
-                        [
-                            "Upload Garmin data export files ",
-                            html.B("DI_CONNECT/DI-Connect-Aggregator/USDFile_*.json"),
-                            " via drag & drop or ",
-                            html.A("select files"),
-                            ".",
-                        ]
-                    ),
-                    multiple=True,
-                ),
-            ],
-            style={
-                "width": "100%",
-                "height": "90px",
-                "lineHeight": "90px",
-                "borderWidth": "1px",
-                "borderStyle": "dashed",
-                "borderRadius": "5px",
-                "textAlign": "center",
-                "margin": "10px",
-            },
-        ),
-        dcc.Dropdown(
-            # GARMIN_DATA_COLS_LABELS,
-            id="display-metric",
-            placeholder="Display metric",
-        ),
-        dcc.Dropdown(
-            TIME_COLS_LABELS,
-            id="group-by",
-            placeholder="Group by",
-        ),
-        dcc.Dropdown(
-            AGGREGATE_FUNCTIONS_LABELS,
-            id="aggregate-function",
-            placeholder="Aggregate via",
-        ),
-        dcc.Store(id="upload-data-output", storage_type="session"),
-        html.Div(id="plot"),
-        html.Br(),
-        html.Center(
-            [
-                html.A("Download your uploaded data as a merged CSV", id="download-data"),
-                html.Div(
-                    [dcc.Download(id="download-data-as-csv")],
-                    style={
-                        "textAlign": "right",
-                    },
-                ),
-            ]
-        ),
-        html.Center(
-            dcc.Link(
-                "Find more information about this widget here.",
-                href="https://github.com/stelsemeyer/garmin-export-visualiser",
-            )
-        ),
-        html.Center("Please allow a few seconds of initial loading."),
-    ]
-)
-
-server = app.server
+    return result_str.capitalize()
 
 
 def _parse_json(json_data):
@@ -171,7 +89,7 @@ def update_options(json_data):
     cols = list(df.columns)
     cols.sort()
 
-    return [{"label": normalise_camel_case(col).capitalize(), "value": col} for col in cols if not col in TIME_COLS]
+    return [{"label": normalise_camel_case(col), "value": col} for col in cols if not col in TIME_COLS]
 
 
 @callback(
@@ -198,8 +116,8 @@ def update_output(json_data, y_col, x_col, agg_func):
         y=y_col,
         title=f"{agg_func.title()} of {normalise_camel_case(y_col)} by {x_col}",
         labels={
-            x_col: normalise_camel_case(x_col).capitalize(),
-            y_col: normalise_camel_case(y_col).capitalize(),
+            x_col: normalise_camel_case(x_col),
+            y_col: normalise_camel_case(y_col),
         },
     )
 
@@ -221,6 +139,81 @@ def download_data(n_clicks, json_data):
         return
     df = _parse_json(json_data)
     return dcc.send_data_frame(df.to_csv, "merged-garmin-export-data.csv")
+
+
+external_stylesheets = ["https://codepen.io/chriddyp/pen/bWLwgP.css"]
+app = Dash(__name__, external_stylesheets=external_stylesheets)
+app.title = "Garmin data export visualiser"
+app.layout = html.Div(
+    [
+        html.H3("Garmin data export visualiser"),
+        html.Div(
+            [
+                dcc.Upload(
+                    id="upload-data",
+                    children=html.Div(
+                        [
+                            "Upload Garmin data export files ",
+                            html.B("DI_CONNECT/DI-Connect-Aggregator/USDFile_*.json"),
+                            " via drag & drop or ",
+                            html.A("select files"),
+                            ".",
+                        ]
+                    ),
+                    multiple=True,
+                ),
+            ],
+            style={
+                "width": "100%",
+                "height": "90px",
+                "lineHeight": "90px",
+                "borderWidth": "1px",
+                "borderStyle": "dashed",
+                "borderRadius": "5px",
+                "textAlign": "center",
+                "margin": "10px",
+            },
+        ),
+        dcc.Dropdown(
+            # GARMIN_DATA_COLS_LABELS,
+            id="display-metric",
+            placeholder="Display metric",
+        ),
+        dcc.Dropdown(
+            [{"label": normalise_camel_case(col), "value": col} for col in TIME_COLS],
+            id="group-by",
+            placeholder="Group by",
+        ),
+        dcc.Dropdown(
+            [{"label": normalise_camel_case(col), "value": col} for col in AGGREGATE_FUNCTIONS],
+            id="aggregate-function",
+            placeholder="Aggregate via",
+        ),
+        dcc.Store(id="upload-data-output", storage_type="session"),
+        html.Div(id="plot"),
+        html.Br(),
+        html.Center(
+            [
+                html.A("Download your uploaded data as a merged CSV.", id="download-data"),
+                html.Div(
+                    [dcc.Download(id="download-data-as-csv")],
+                    style={
+                        "textAlign": "right",
+                    },
+                ),
+            ]
+        ),
+        html.Center(
+            dcc.Link(
+                "Find more information about this widget.",
+                href="https://github.com/stelsemeyer/garmin-export-visualiser",
+            )
+        ),
+        html.Center("Please allow a few seconds of initial loading."),
+    ]
+)
+
+server = app.server
 
 
 @app.server.route("/ping")
