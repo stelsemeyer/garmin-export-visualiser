@@ -1,4 +1,5 @@
 from dash import Dash, dcc, html, Input, Output, State, callback
+from dash.exceptions import PreventUpdate
 import plotly.express as px
 
 import base64
@@ -24,16 +25,15 @@ def _parse_json(json_data):
     return pd.read_json(json_data, convert_dates=TIME_COLS)
 
 
-def parse_content(contents, filename, date):
-    content_type, content_string = contents.split(",")
+def parse_content(content):
+    content_type, content_string = content.split(",")
 
-    decoded = base64.b64decode(content_string)
+    decoded_content = base64.b64decode(content_string)
     try:
-        df = pd.read_json(io.BytesIO(decoded), convert_dates=[DATE_COL])
+        df = pd.read_json(io.BytesIO(decoded_content), convert_dates=[DATE_COL])
         num_cols = list(df.select_dtypes(include=["int64", "float64"]).columns)
         df = df[[DATE_COL] + num_cols]
     except Exception as e:
-        print(e)
         return html.Div(
             [
                 f"There was an error processing this file: {e}",
@@ -44,18 +44,17 @@ def parse_content(contents, filename, date):
 
 
 @callback(
+    Output("display-metric", "options"),
     Output("upload-data-output", "data"),
     Input("upload-data", "contents"),
-    State("upload-data", "filename"),
-    State("upload-data", "last_modified"),
 )
-def parse_contents(list_of_contents, list_of_names, list_of_dates):
-    if list_of_contents is not None:
-        children = [parse_content(c, n, d) for c, n, d in zip(list_of_contents, list_of_names, list_of_dates)]
+def prepare_data(contents):
+    if contents is not None:
+        dfs = [parse_content(c) for c in contents]
     else:
-        return
+        raise PreventUpdate
 
-    df = pd.concat(children, ignore_index=True)
+    df = pd.concat(dfs, ignore_index=True)
 
     df["week"] = df[DATE_COL] - pd.to_timedelta(df[DATE_COL].dt.dayofweek, unit="D")
     df["month"] = df[DATE_COL] - pd.to_timedelta(df[DATE_COL].dt.day - 1, unit="D")
@@ -73,23 +72,11 @@ def parse_contents(list_of_contents, list_of_names, list_of_dates):
 
     df = df.sort_values(DATE_COL)
 
-    return df.to_json()
-
-
-@callback(
-    Output("display-metric", "options"),
-    Input("upload-data-output", "data"),
-    prevent_initial_call=True,
-)
-def update_options(json_data):
-    if json_data is None:
-        return []
-
-    df = _parse_json(json_data)
     cols = list(df.columns)
     cols.sort()
+    options = [{"label": normalise_camel_case(col), "value": col} for col in cols if not col in TIME_COLS]
 
-    return [{"label": normalise_camel_case(col), "value": col} for col in cols if not col in TIME_COLS]
+    return options, df.to_json()
 
 
 @callback(
@@ -99,7 +86,7 @@ def update_options(json_data):
     Input("group-by", "value"),
     Input("aggregate-function", "value"),
 )
-def update_output(json_data, y_col, x_col, agg_func):
+def update_plot(json_data, y_col, x_col, agg_func):
     if json_data is None:
         return
 
