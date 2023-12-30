@@ -19,6 +19,8 @@ app = Dash(__name__, external_stylesheets=external_stylesheets)
 DATE_COL = "calendarDate"
 TIME_COLS = ["calendarDate", "week", "month", "year"]
 TIME_COLS_LABELS = [{"label": normalise_camel_case(col).capitalize(), "value": col} for col in TIME_COLS]
+
+# TODO: explore dynamically
 GARMIN_DATA_COLS = [
     "activeKilocalories",
     "activeSeconds",
@@ -60,29 +62,36 @@ AGGREGATE_FUNCTIONS_LABELS = [
 ]
 
 
+app.title = "Garmin data export visualiser"
 app.layout = html.Div(
     [
         html.H3("Garmin data export visualiser"),
-        dcc.Upload(
-            id="upload-data",
-            children=html.Div(
-                [
-                    "Request a Garmin data export and upload all desired files starting with UDSFile_ from the folder DI_CONNECT/DI-Connect-Aggregator via drag & drop or ",
-                    html.A("select files"),
-                    ".",
-                ]
-            ),
+        html.Div(
+            [
+                dcc.Upload(
+                    id="upload-data",
+                    children=html.Div(
+                        [
+                            "Upload Garmin data export files ",
+                            html.B("DI_CONNECT/DI-Connect-Aggregator/USDFile_*.json"),
+                            " via drag & drop or ",
+                            html.A("select files"),
+                            ".",
+                        ]
+                    ),
+                    multiple=True,
+                ),
+            ],
             style={
                 "width": "100%",
-                "height": "60px",
-                "lineHeight": "60px",
+                "height": "90px",
+                "lineHeight": "90px",
                 "borderWidth": "1px",
                 "borderStyle": "dashed",
                 "borderRadius": "5px",
                 "textAlign": "center",
                 "margin": "10px",
             },
-            multiple=True,
         ),
         dcc.Dropdown(
             GARMIN_DATA_COLS_LABELS,
@@ -99,8 +108,16 @@ app.layout = html.Div(
             id="aggregate-function",
             placeholder="Aggregate via",
         ),
-        dcc.Store(id="output-data-upload", storage_type="session"),
-        html.Div(id="output-data-render"),
+        dcc.Store(id="upload-data-output", storage_type="session"),
+        html.Div(id="plot"),
+        html.Br(),
+        html.A("Download raw data as CSV", id="download-data"),
+        html.Div(
+            [dcc.Download(id="download-data-as-csv")],
+            style={
+                "textAlign": "right",
+            },
+        ),
     ]
 )
 
@@ -127,7 +144,7 @@ def parse_content(contents, filename, date):
 
 
 @callback(
-    Output("output-data-upload", "data"),
+    Output("upload-data-output", "data"),
     Input("upload-data", "contents"),
     State("upload-data", "filename"),
     State("upload-data", "last_modified"),
@@ -144,12 +161,14 @@ def parse_contents(list_of_contents, list_of_names, list_of_dates):
     df["month"] = df[DATE_COL] - pd.to_timedelta(df[DATE_COL].dt.day - 1, unit="D")
     df["year"] = df[DATE_COL].dt.year.astype(str)
 
+    df = df.sort_values(DATE_COL)
+
     return df.to_json()
 
 
 @callback(
-    Output("output-data-render", "children"),
-    Input("output-data-upload", "data"),
+    Output("plot", "children"),
+    Input("upload-data-output", "data"),
     Input("display-metric", "value"),
     Input("group-by", "value"),
     Input("aggregate-function", "value"),
@@ -181,6 +200,19 @@ def update_output(json_data, y_col, x_col, agg_func):
             dcc.Graph(id="resting-heart-rate-plot", figure=fig),
         ]
     )
+
+
+@callback(
+    Output("download-data-as-csv", "data"),
+    Input("download-data", "n_clicks"),
+    State("upload-data-output", "data"),
+    prevent_initial_call=True,
+)
+def download_data(n_clicks, json_data):
+    if json_data is None:
+        return
+    df = pd.read_json(json_data, convert_dates=[DATE_COL, "week", "month", "year"])
+    return dcc.send_data_frame(df.to_csv, "merged-garmin-export-data.csv")
 
 
 @app.server.route("/ping")
