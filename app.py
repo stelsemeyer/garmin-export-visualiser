@@ -11,12 +11,17 @@ import pandas as pd
 DATE_COL = "calendarDate"
 TIME_COLS = ["calendarDate", "week", "month", "year"]
 AGGREGATE_FUNCTIONS = ["median", "mean", "sum", "min", "max", "count"]
+PLOT_TYPES = ["scatter", "line", "bar"]
 
 
-def normalise_camel_case(x):
+def normalise_string(x):
     """Convert a string like 'camelCase' to 'camel case'."""
     result_str = "".join([" " + char if char.isupper() and index != 0 else char for index, char in enumerate(x)])
     return result_str.capitalize()
+
+
+def generate_labels(x):
+    return [{"label": normalise_string(v), "value": v} for v in x]
 
 
 def _parse_json(json_data):
@@ -74,7 +79,7 @@ def prepare_data(contents):
 
     cols = list(df.columns)
     cols.sort()
-    options = [{"label": normalise_camel_case(col), "value": col} for col in cols if not col in TIME_COLS]
+    options = generate_labels([c for c in cols if not c in TIME_COLS])
 
     return options, df.to_json()
 
@@ -85,26 +90,32 @@ def prepare_data(contents):
     Input("display-metric", "value"),
     Input("group-by", "value"),
     Input("aggregate-function", "value"),
+    Input("plot-type", "value"),
 )
-def update_plot(json_data, y_col, x_col, agg_func):
-    if json_data is None:
-        return
+def update_plot(json_data, y_col, x_col, agg_func, plot_type):
+    if json_data is None or x_col is None or y_col is None or agg_func is None:
+        raise PreventUpdate
 
     df = _parse_json(json_data)
-
-    if x_col is None or y_col is None or agg_func is None:
-        return
-
     plot_df = df.groupby(x_col).agg({y_col: agg_func}).reset_index()
 
-    fig = px.scatter(
+    if plot_type == "scatter":
+        plot_func = px.scatter
+    elif plot_type == "line":
+        plot_func = px.line
+    elif plot_type == "bar":
+        plot_func = px.bar
+    else:
+        raise ValueError("Unknown plot type.")
+
+    fig = plot_func(
         plot_df,
         x=x_col,
         y=y_col,
-        title=f"{agg_func.title()} of {normalise_camel_case(y_col)} by {x_col}",
+        title=f"{agg_func.title()} of {normalise_string(y_col)} by {x_col}",
         labels={
-            x_col: normalise_camel_case(x_col),
-            y_col: normalise_camel_case(y_col),
+            x_col: normalise_string(x_col),
+            y_col: normalise_string(y_col),
         },
     )
 
@@ -162,19 +173,24 @@ app.layout = html.Div(
             },
         ),
         dcc.Dropdown(
-            # GARMIN_DATA_COLS_LABELS,
             id="display-metric",
             placeholder="Display metric",
         ),
         dcc.Dropdown(
-            [{"label": normalise_camel_case(col), "value": col} for col in TIME_COLS],
+            generate_labels(TIME_COLS),
             id="group-by",
             placeholder="Group by",
         ),
         dcc.Dropdown(
-            [{"label": normalise_camel_case(col), "value": col} for col in AGGREGATE_FUNCTIONS],
+            generate_labels(AGGREGATE_FUNCTIONS),
             id="aggregate-function",
             placeholder="Aggregate via",
+        ),
+        dcc.Dropdown(
+            generate_labels(PLOT_TYPES),
+            "scatter",
+            id="plot-type",
+            placeholder="Plot type",
         ),
         dcc.Store(id="upload-data-output", storage_type="session"),
         html.Div(id="plot"),
