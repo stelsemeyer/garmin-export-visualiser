@@ -76,13 +76,24 @@ app.layout = html.Div(
         dcc.Store(id="upload-data-output", storage_type="session"),
         html.Div(id="plot"),
         html.Br(),
-        html.A("Download raw data as CSV", id="download-data"),
-        html.Div(
-            [dcc.Download(id="download-data-as-csv")],
-            style={
-                "textAlign": "right",
-            },
+        html.Center(
+            [
+                html.A("Download your uploaded data as a merged CSV", id="download-data"),
+                html.Div(
+                    [dcc.Download(id="download-data-as-csv")],
+                    style={
+                        "textAlign": "right",
+                    },
+                ),
+            ]
         ),
+        html.Center(
+            dcc.Link(
+                "Find more information about this widget here.",
+                href="https://github.com/stelsemeyer/garmin-export-visualiser",
+            )
+        ),
+        html.Center("Please allow a few seconds of initial loading."),
     ]
 )
 
