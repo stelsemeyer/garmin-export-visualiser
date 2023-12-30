@@ -8,6 +8,7 @@ import pandas as pd
 
 
 def normalise_camel_case(x):
+    """Convert a string like 'camelCase' to 'camel case'."""
     result_str = "".join([" " + char if char.isupper() and index != 0 else char for index, char in enumerate(x)])
     return result_str.lower()
 
@@ -144,6 +145,7 @@ def parse_contents(list_of_contents, list_of_names, list_of_dates):
     df = df.sort_values(DATE_COL)
 
     return df.to_json()
+
 
 @callback(
     Output("display-metric", "options"),

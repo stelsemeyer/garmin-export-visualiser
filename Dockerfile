@@ -9,4 +9,4 @@ COPY app.py app.py
 
 EXPOSE 8050
 
-CMD exec gunicorn --bind 0.0.0.0:8050 --log-level debug --workers 1 --threads 1 --timeout 0 app:server
+CMD exec gunicorn --bind 0.0.0.0:8050 --log-level info --workers 1 --threads 1 --timeout 0 app:server
