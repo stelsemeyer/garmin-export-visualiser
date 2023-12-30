@@ -20,42 +20,6 @@ DATE_COL = "calendarDate"
 TIME_COLS = ["calendarDate", "week", "month", "year"]
 TIME_COLS_LABELS = [{"label": normalise_camel_case(col).capitalize(), "value": col} for col in TIME_COLS]
 
-# TODO: explore dynamically
-GARMIN_DATA_COLS = [
-    "activeKilocalories",
-    "activeSeconds",
-    "averageMonitoringEnvironmentAltitude" "bmrKilocalories",
-    "burnedKilocalories",
-    "currentDayRestingHeartRate",
-    "dailyStepGoal",
-    "dailyTotalFromEpochData",
-    "durationInMilliseconds",
-    "floorsAscendedInMeters",
-    "floorsDescendedInMeters",
-    "highlyActiveSeconds",
-    "maxAvgHeartRate",
-    "maxHeartRate",
-    "minAvgHeartRate",
-    "minHeartRate",
-    "moderateIntensityMinutes",
-    "pushDistance",
-    "remainingKilocalories",
-    "restingCaloriesFromActivity",
-    "restingHeartRate",
-    "restingHeartRateTimestamp",
-    "totalDistanceMeters",
-    "totalKilocalories",
-    "totalPushes",
-    "totalSteps",
-    "userFloorsAscendedGoal",
-    "userIntensityMinutesGoal",
-    "vigorousIntensityMinutes",
-    "wellnessActiveKilocalories",
-    "wellnessDistanceMeters",
-    "wellnessKilocalories",
-    "wellnessTotalKilocalories",
-]
-GARMIN_DATA_COLS_LABELS = [{"label": normalise_camel_case(col).capitalize(), "value": col} for col in GARMIN_DATA_COLS]
 AGGREGATE_FUNCTIONS = ["median", "mean", "sum", "min", "max", "count"]
 AGGREGATE_FUNCTIONS_LABELS = [
     {"label": normalise_camel_case(col).capitalize(), "value": col} for col in AGGREGATE_FUNCTIONS
@@ -94,7 +58,7 @@ app.layout = html.Div(
             },
         ),
         dcc.Dropdown(
-            GARMIN_DATA_COLS_LABELS,
+            # GARMIN_DATA_COLS_LABELS,
             id="display-metric",
             placeholder="Display metric",
         ),
@@ -122,6 +86,12 @@ app.layout = html.Div(
 )
 
 server = app.server
+
+
+def _parse_json(json_data):
+    if json_data is None:
+        return
+    return pd.read_json(json_data, convert_dates=TIME_COLS)
 
 
 def parse_content(contents, filename, date):
@@ -161,9 +131,34 @@ def parse_contents(list_of_contents, list_of_names, list_of_dates):
     df["month"] = df[DATE_COL] - pd.to_timedelta(df[DATE_COL].dt.day - 1, unit="D")
     df["year"] = df[DATE_COL].dt.year.astype(str)
 
+    for col in df.columns:
+        if col.endswith("Meters"):
+            df[col.replace("Meters", "Kilometers")] = df[col] / 1000
+        if col.endswith("Minutes"):
+            df[col.replace("Minutes", "Hours")] = df[col] / 60
+        if col.endswith("Seconds"):
+            df[col.replace("Seconds", "Hours")] = df[col] / (60 * 60)
+        if col.endswith("Milliseconds"):
+            df[col.replace("Milliseconds", "Hours")] = df[col] / (60 * 1000)
+
     df = df.sort_values(DATE_COL)
 
     return df.to_json()
+
+@callback(
+    Output("display-metric", "options"),
+    Input("upload-data-output", "data"),
+    prevent_initial_call=True,
+)
+def update_options(json_data):
+    if json_data is None:
+        return []
+
+    df = _parse_json(json_data)
+    cols = list(df.columns)
+    cols.sort()
+
+    return [{"label": normalise_camel_case(col).capitalize(), "value": col} for col in cols if not col in TIME_COLS]
 
 
 @callback(
@@ -177,7 +172,7 @@ def update_output(json_data, y_col, x_col, agg_func):
     if json_data is None:
         return
 
-    df = pd.read_json(json_data, convert_dates=[DATE_COL, "week", "month", "year"])
+    df = _parse_json(json_data)
 
     if x_col is None or y_col is None or agg_func is None:
         return
@@ -211,7 +206,7 @@ def update_output(json_data, y_col, x_col, agg_func):
 def download_data(n_clicks, json_data):
     if json_data is None:
         return
-    df = pd.read_json(json_data, convert_dates=[DATE_COL, "week", "month", "year"])
+    df = _parse_json(json_data)
     return dcc.send_data_frame(df.to_csv, "merged-garmin-export-data.csv")
 
 
